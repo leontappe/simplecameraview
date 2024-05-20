@@ -1,16 +1,10 @@
 # simplecameraview
 
-A new Flutter project.
+no bullshit allowed camera view since I don't want to pay 3$ for a stupid simple camera view app just so I can get a clean camera feed from my old iPhone
 
-## Getting Started
+## Features
+- Camera view
+- You look at the world through your camera
+- You can see objects just like your phone would see them!
 
-This project is a starting point for a Flutter application.
-
-A few resources to get you started if this is your first Flutter project:
-
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+_Wow_
