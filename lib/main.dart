@@ -1,5 +1,6 @@
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'camera_view.dart';
 
@@ -9,7 +10,10 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   _cameras = await availableCameras();
+
   runApp(const CameraApp());
+
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
 }
 
 /// CameraApp is the Main Application.
@@ -27,7 +31,14 @@ class _CameraAppState extends State<CameraApp> {
   @override
   void initState() {
     super.initState();
-    controller = CameraController(_cameras[0], ResolutionPreset.max);
+
+    controller = CameraController(
+      _cameras[0],
+      ResolutionPreset.max,
+      enableAudio: false,
+      fps: 60,
+    );
+
     controller.initialize().then((_) {
       if (!mounted) {
         return;
