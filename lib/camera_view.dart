@@ -77,7 +77,7 @@ class _CameraViewState extends State<CameraView> {
 
   Widget _debugInfo() {
     return Container(
-      decoration: BoxDecoration(color: Colors.black.withOpacity(0.5)),
+      decoration: BoxDecoration(color: Colors.black.withAlpha(128)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
