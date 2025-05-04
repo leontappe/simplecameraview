@@ -56,7 +56,7 @@ class _CameraAppState extends State<CameraApp> {
       _cameras[0],
       ResolutionPreset.max,
       enableAudio: false,
-      fps: 60,
+      fps: 60
     );
 
     controller.initialize().then((_) {

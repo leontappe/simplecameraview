@@ -17,10 +17,17 @@ class CameraState {
   double minExposureOffset;
   double maxExposureOffset;
   double exposureOffsetStep;
+  bool lockExposure;
+  Offset? exposurePoint;
 
   FlashMode flashMode;
 
   bool lockFocus;
+  Offset? focusPoint;
+
+  int fps;
+  ResolutionPreset resolutionPreset;
+  int? videoBitrate;
 
   CameraState({
     this.isPortrait = false,
@@ -31,9 +38,18 @@ class CameraState {
     this.minExposureOffset = -1.0,
     this.maxExposureOffset = 1.0,
     this.exposureOffsetStep = 0.1,
+    this.lockExposure = false,
     this.flashMode = FlashMode.off,
     this.lockFocus = false,
-  });
+    this.fps = 60,
+    this.resolutionPreset = ResolutionPreset.max,
+    this.videoBitrate,
+  })  : assert(currentZoomLevel >= minZoomLevel &&
+            currentZoomLevel <= maxZoomLevel),
+        assert(currentExposureOffset >= minExposureOffset &&
+            currentExposureOffset <= maxExposureOffset),
+        assert(exposureOffsetStep > 0.0),
+        assert(fps > 0);
 }
 
 /// A widget showing a live camera preview.
@@ -48,13 +64,86 @@ class CameraView extends StatefulWidget {
   State<CameraView> createState() => _CameraViewState();
 }
 
+class SettingsTile extends StatelessWidget {
+  final String title;
+  final List<Widget> children;
+
+  const SettingsTile({
+    super.key,
+    required this.title,
+    this.children = const [],
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.all(4.0),
+      color: Colors.blueGrey.shade800,
+      child: Stack(
+        clipBehavior: Clip.hardEdge,
+        alignment: Alignment.center,
+        children: [
+          Positioned(
+            top: 4.0,
+            left: 8.0,
+            child: Text(
+              title,
+              style: TextStyle(
+                color: Colors.grey,
+                fontSize: 14.0,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          Positioned(
+            top: 26.0,
+            left: 8.0,
+            right: 8.0,
+            bottom: 8.0,
+            child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.start,
+                children: children),
+          )
+        ],
+      ),
+    );
+  }
+}
+
+class SettingsTitle extends StatelessWidget {
+  final String title;
+
+  const SettingsTitle(this.title, {super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      title,
+      style: TextStyle(
+        color: Colors.grey,
+        fontSize: 12.0,
+        fontWeight: FontWeight.bold,
+      ),
+    );
+  }
+}
+
 class _CameraViewState extends State<CameraView> {
   final CameraState _state = CameraState();
 
+  CameraController? _editedController;
+
   bool _showDebugInfo = false;
+
   bool _showControls = false;
   bool _showSettings = false;
   bool _showZoomIndicator = false;
+  bool _zooming = false;
+  bool _hideRightControls = false;
+  late final List<Offset> _areaOffsets;
+
+  CameraController get _controller => _editedController ?? widget.controller;
 
   Container get _halfLine => Container(
         height: 2.0,
@@ -83,7 +172,7 @@ class _CameraViewState extends State<CameraView> {
         ValueListenableBuilder<CameraValue>(
           valueListenable: widget.controller,
           builder: widget.controller.value.isInitialized
-              ? _previewWindowBuilder
+              ? (_, __, ___) => _previewWindowBuilder()
               : (_, __, ___) => const SizedBox(),
         ),
         if (_showDebugInfo)
@@ -95,55 +184,7 @@ class _CameraViewState extends State<CameraView> {
           Align(
             alignment:
                 _state.isPortrait ? Alignment.bottomLeft : Alignment.topRight,
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final stopperHeight = 16.0;
-                final indicatorWidth = 32.0;
-
-                return Stack(
-                  children: [
-                    Container(
-                      padding: EdgeInsets.only(
-                        top: stopperHeight,
-                        bottom: stopperHeight + 2.0,
-                      ),
-                      height: constraints.maxHeight,
-                      width: indicatorWidth,
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          _line,
-                          _quarterLine,
-                          _quarterLine,
-                          _halfLine,
-                          _quarterLine,
-                          _quarterLine,
-                          _line,
-                        ],
-                      ),
-                    ),
-                    Container(
-                      height: constraints.maxHeight,
-                      padding: EdgeInsets.only(
-                        top: stopperHeight +
-                            (constraints.maxHeight /
-                                _state.maxZoomLevel *
-                                (_state.currentZoomLevel - 1)),
-                        bottom: (constraints.maxHeight - stopperHeight) -
-                            (constraints.maxHeight /
-                                _state.maxZoomLevel *
-                                (_state.currentZoomLevel - 1)) -
-                            4.0,
-                      ),
-                      width: indicatorWidth,
-                      child: _halfLine.copyWith(
-                          color: Colors.blueAccent, height: 2.0, width: 8.0),
-                    ),
-                  ],
-                );
-              },
-            ),
+            child: _zoomIndicatorBuilder(),
           ),
         _gestureDetectorBuilder(),
         if (_showControls)
@@ -179,6 +220,45 @@ class _CameraViewState extends State<CameraView> {
 
     // wait until controller is ready to get zoom levels
     widget.controller.addListener(_controllerStateListener);
+
+    _areaOffsets = [
+      Offset(
+        _controller.value.previewSize!.width / 6,
+        _controller.value.previewSize!.height / 6 * 5,
+      ),
+      Offset(
+        _controller.value.previewSize!.width / 6 * 3,
+        _controller.value.previewSize!.height / 6 * 5,
+      ),
+      Offset(
+        _controller.value.previewSize!.width / 6 * 5,
+        _controller.value.previewSize!.height / 6 * 5,
+      ),
+      Offset(
+        _controller.value.previewSize!.width / 6,
+        _controller.value.previewSize!.height / 6 * 3,
+      ),
+      Offset(
+        _controller.value.previewSize!.width / 6 * 3,
+        _controller.value.previewSize!.height / 6 * 3,
+      ),
+      Offset(
+        _controller.value.previewSize!.width / 6 * 5,
+        _controller.value.previewSize!.height / 6 * 3,
+      ),
+      Offset(
+        _controller.value.previewSize!.width / 6,
+        _controller.value.previewSize!.height / 6,
+      ),
+      Offset(
+        _controller.value.previewSize!.width / 6 * 3,
+        _controller.value.previewSize!.height / 6,
+      ),
+      Offset(
+        _controller.value.previewSize!.width / 6 * 5,
+        _controller.value.previewSize!.height / 6,
+      ),
+    ];
   }
 
   void _controllerStateListener() {
@@ -209,6 +289,13 @@ class _CameraViewState extends State<CameraView> {
       children: [
         IconButton(
           icon: _flashIconBuilder(_state.flashMode),
+          onLongPress: () {
+            HapticFeedback.heavyImpact();
+            setState(() {
+              _state.flashMode = FlashMode.off;
+            });
+            widget.controller.setFlashMode(_state.flashMode);
+          },
           onPressed: () {
             HapticFeedback.heavyImpact();
 
@@ -233,6 +320,20 @@ class _CameraViewState extends State<CameraView> {
             widget.controller.setFlashMode(_state.flashMode);
           },
         ),
+        IconButton(
+          icon: _state.lockFocus
+              ? const Icon(Icons.lock)
+              : const Icon(Icons.lock_open),
+          onPressed: () {
+            HapticFeedback.heavyImpact();
+            setState(() {
+              _state.lockFocus = !_state.lockFocus;
+            });
+            widget.controller.setFocusMode(
+              _state.lockFocus ? FocusMode.locked : FocusMode.auto,
+            );
+          },
+        ),
         Spacer(), // Notch spacer
         IconButton(
           icon: const Icon(Icons.settings_rounded),
@@ -251,6 +352,10 @@ class _CameraViewState extends State<CameraView> {
   ///
   /// This is where more nitty gritty controls like exposure, framerate, white balance, etc. live
   Widget _controlsRightBuilder() {
+    if (_hideRightControls) {
+      return const SizedBox();
+    }
+
     return _controlsBuilder(
       children: [
         IconButton(
@@ -259,42 +364,6 @@ class _CameraViewState extends State<CameraView> {
             HapticFeedback.heavyImpact();
 
             widget.controller.setFocusPoint(null);
-          },
-        ),
-        IconButton(
-          icon: _state.lockFocus
-              ? const Icon(Icons.lock)
-              : const Icon(Icons.lock_open),
-          onPressed: () {
-            HapticFeedback.heavyImpact();
-            setState(() {
-              _state.lockFocus = !_state.lockFocus;
-            });
-            widget.controller.setFocusMode(
-              _state.lockFocus ? FocusMode.locked : FocusMode.auto,
-            );
-          },
-        ),
-        IconButton(
-          icon: const Icon(Icons.exposure),
-          onPressed: () {
-            HapticFeedback.heavyImpact();
-            setState(() {
-              _state.currentExposureOffset =
-                  (_state.currentExposureOffset + _state.exposureOffsetStep)
-                      .clamp(
-                _state.minExposureOffset,
-                _state.maxExposureOffset,
-              );
-            });
-            widget.controller.setExposureOffset(_state.currentExposureOffset);
-          },
-          onLongPress: () {
-            HapticFeedback.heavyImpact();
-            setState(() {
-              _state.currentExposureOffset = 0;
-            });
-            widget.controller.setExposureOffset(_state.currentExposureOffset);
           },
         ),
       ],
@@ -310,12 +379,15 @@ class _CameraViewState extends State<CameraView> {
           Text('Zoom: ${_state.currentZoomLevel}'),
           Text('Min zoom: ${_state.minZoomLevel}'),
           Text('Max zoom: ${_state.maxZoomLevel}'),
-          Text('Exposure: ${_state.currentExposureOffset}'),
+          Text('Exposure offset: ${_state.currentExposureOffset}'),
           Text('Min exposure offset: ${_state.minExposureOffset}'),
           Text('Max exposure offset: ${_state.maxExposureOffset}'),
           Text('Exposure offset step: ${_state.exposureOffsetStep}'),
+          Text('Lock Exposure: ${_state.lockExposure}'),
+          Text('Exposure Point: ${_state.exposurePoint}'),
           Text('Flash Mode: ${_flashModeToString(_state.flashMode)}'),
           Text('Focus Mode: ${_state.lockFocus ? "Locked" : "Auto"}'),
+          Text('Focus Point: ${_state.focusPoint}'),
           Text('Orientation: ${_getApplicableOrientation()}'),
           Text('Preview size: ${widget.controller.value.previewSize}'),
         ],
@@ -355,14 +427,23 @@ class _CameraViewState extends State<CameraView> {
         HapticFeedback.lightImpact();
         setState(() {
           _showZoomIndicator = true;
+          _zooming = true;
+          _hideRightControls = true;
         });
       },
       onVerticalDragEnd: (details) {
         HapticFeedback.lightImpact();
 
-        Future.delayed(const Duration(milliseconds: 300), () {
+        setState(() {
+          _zooming = false;
+        });
+
+        Future.delayed(const Duration(milliseconds: 1000), () {
           setState(() {
-            _showZoomIndicator = false;
+            if (!_zooming) {
+              _showZoomIndicator = false;
+              _hideRightControls = false;
+            }
           });
         });
       },
@@ -434,7 +515,10 @@ class _CameraViewState extends State<CameraView> {
 
   Widget _previewBuilder() {
     // Get the native preview size from the controller.
-    final previewSize = widget.controller.value.previewSize!;
+    final previewSize = _controller.value.previewSize;
+    if (previewSize == null) {
+      return const SizedBox();
+    }
 
     return OverflowBox(
       alignment: Alignment.center,
@@ -452,14 +536,16 @@ class _CameraViewState extends State<CameraView> {
 
   // return container that clips the camera preview to the screen size, discarding any pixels that are off-screen
   Widget _previewWindowBuilder(
-      BuildContext context, CameraValue value, Widget? child) {
+      {double landscapeAspectRatio = 16 / 9,
+      double portraitAspectRatio = 9 / 16}) {
     return LayoutBuilder(
       builder: (context, constraints) {
         // Calculate the maximum width and height from the parent.
         final double maxWidth = constraints.maxWidth;
         final double maxHeight = constraints.maxHeight;
         // Choose the ratio based on device orientation.
-        final double aspectRatio = _isPortrait() ? 9 / 16 : 16 / 9;
+        final double aspectRatio =
+            _isPortrait() ? portraitAspectRatio : landscapeAspectRatio;
 
         // Determine the ideal width and height keeping our desired aspect ratio.
         double previewWidth;
@@ -498,20 +584,213 @@ class _CameraViewState extends State<CameraView> {
           // Grid overlay
           Padding(
             padding: const EdgeInsets.only(top: 42.0, left: 48.0, right: 32.0),
-            child: GridView.builder(
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3,
-                crossAxisSpacing: 4.0,
-                mainAxisExtent: MediaQuery.of(context).size.height * 0.4,
-              ),
+            child: GridView.count(
+              crossAxisCount: 3,
+              crossAxisSpacing: 4.0,
+              mainAxisSpacing: 4.0,
+              childAspectRatio: _state.isPortrait ? 9 / 6 : 16 / 9,
               physics: const NeverScrollableScrollPhysics(),
-              itemCount: 6,
-              itemBuilder: (context, index) {
-                return Container(
+              children: [
+                Container(
+                  clipBehavior: Clip.hardEdge,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(0.0),
+                    color: Colors.blueGrey.shade800,
+                  ),
                   margin: const EdgeInsets.all(4.0),
-                  color: Colors.blueGrey.shade800,
-                );
-              },
+                  child: Stack(
+                    clipBehavior: Clip.hardEdge,
+                    alignment: Alignment.center,
+                    children: [
+                      Transform.scale(
+                        scale: 1.05,
+                        child: _previewWindowBuilder(),
+                      ),
+                      Positioned(
+                        top: 4.0,
+                        left: 8.0,
+                        child: Text(
+                          'Preview',
+                          style: TextStyle(
+                            color: Colors.grey,
+                            fontSize: 12.0,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                SettingsTile(
+                  title: 'Exposure',
+                  children: [
+                    SettingsTitle(
+                      'Offset: ${_state.currentExposureOffset.toStringAsFixed(1)}',
+                    ),
+                    GestureDetector(
+                      onDoubleTap: () {
+                        HapticFeedback.heavyImpact();
+                        setState(() {
+                          _state.currentExposureOffset = 0.0;
+                        });
+                        widget.controller.setExposureOffset(0.0);
+                      },
+                      child: Slider(
+                        padding: const EdgeInsets.only(
+                          top: 4.0,
+                          left: 8.0,
+                          right: 8.0,
+                          bottom: 8.0,
+                        ),
+                        value: _state.currentExposureOffset,
+                        min: _state.minExposureOffset,
+                        max: _state.maxExposureOffset,
+                        divisions: ((_state.maxExposureOffset -
+                                    _state.minExposureOffset) /
+                                _state.exposureOffsetStep)
+                            .round(),
+                        onChangeEnd: (value) {
+                          HapticFeedback.heavyImpact();
+                          setState(() {
+                            _state.currentExposureOffset = value;
+                          });
+                          widget.controller.setExposureOffset(value);
+                        },
+                        onChanged: (value) {
+                          setState(() {
+                            _state.currentExposureOffset = value;
+                          });
+                        },
+                      ),
+                    ),
+                    SizedBox(
+                      height: 42.0,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          SettingsTitle('Lock Exposure'),
+                          Switch(
+                            value: _state.lockExposure,
+                            onChanged: (value) {
+                              HapticFeedback.heavyImpact();
+                              setState(() {
+                                _state.lockExposure = value;
+                              });
+                              widget.controller.setExposureMode(
+                                value ? ExposureMode.locked : ExposureMode.auto,
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                SettingsTile(
+                  title: 'Stream Info',
+                  children: [
+                    SettingsTitle(
+                      'FPS: ${_controller.mediaSettings.fps}',
+                    ),
+                    if (_controller.value.previewSize != null)
+                      SettingsTitle(
+                        'Resolution: ${_controller.value.previewSize!.width.round()} x ${_controller.value.previewSize!.height.round()}',
+                      ),
+                    SettingsTitle(
+                      'Aspect Ratio: ${_controller.value.aspectRatio.toStringAsFixed(2)}',
+                    ),
+                    if (_controller.mediaSettings.videoBitrate != null)
+                      SettingsTitle(
+                        'Bitrate: ${(_controller.mediaSettings.videoBitrate ?? 0 / 1000).round()} kbps',
+                      ),
+                    SettingsTitle(
+                      'Orientation: ${_controller.value.deviceOrientation.name}',
+                    ),
+                  ],
+                ),
+                SettingsTile(
+                  title: 'Focus',
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        // 3x3 grid of focus points
+                        SizedBox(
+                          height: 96.0,
+                          width: 128.0,
+                          child: GridView.builder(
+                            gridDelegate:
+                                SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 3,
+                              crossAxisSpacing: 2.0,
+                              mainAxisSpacing: 2.0,
+                              childAspectRatio: 1.6,
+                            ),
+                            itemCount: 9,
+                            itemBuilder: (context, index) {
+                              return InkWell(
+                                onTap: () {
+                                  HapticFeedback.heavyImpact();
+
+                                  setState(() {
+                                    _state.focusPoint = _areaOffsets[index];
+                                  });
+                                  widget.controller
+                                      .setFocusPoint(_state.focusPoint);
+                                },
+                                child: Container(
+                                  color: Colors.grey,
+                                  child: Center(
+                                    child: Text(
+                                      '$index',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 10.0,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+
+                        const SizedBox(width: 8.0),
+
+                        Column(
+                          mainAxisSize: MainAxisSize.max,
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            SettingsTitle('Lock Focus'),
+                            Switch(
+                              value: _state.lockFocus,
+                              onChanged: (value) {
+                                HapticFeedback.heavyImpact();
+                                setState(() {
+                                  _state.lockFocus = value;
+                                });
+                                widget.controller.setFocusMode(
+                                  value ? FocusMode.locked : FocusMode.auto,
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                SettingsTile(
+                  title: '',
+                  children: [],
+                ),
+                SettingsTile(
+                  title: '',
+                  children: [],
+                ),
+              ],
             ),
           ),
 
@@ -545,6 +824,93 @@ class _CameraViewState extends State<CameraView> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _zoomIndicatorBuilder() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const stopperHeight = 16.0;
+        const indicatorWidth = 32.0;
+        const totalWidth = 56.0;
+
+        final text = Container(
+          width: totalWidth,
+          height: constraints.maxHeight,
+          padding: const EdgeInsets.only(top: 10.0, bottom: 14.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '${_state.minZoomLevel.toStringAsFixed(0)}x',
+                style: TextStyle(color: Colors.white54, fontSize: 10.0),
+              ),
+              Text(
+                '${_state.currentZoomLevel.toStringAsFixed(0)}x',
+                style: TextStyle(
+                  color: Colors.white54,
+                  fontSize: 12.0,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              Text(
+                '${_state.maxZoomLevel.toStringAsFixed(0)}x',
+                style: TextStyle(color: Colors.white54, fontSize: 10.0),
+              ),
+            ],
+          ),
+        );
+
+        final markings = Container(
+          padding: EdgeInsets.only(
+            top: stopperHeight,
+            bottom: stopperHeight + 2.0,
+          ),
+          height: constraints.maxHeight,
+          width: indicatorWidth,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              _line,
+              _quarterLine,
+              _quarterLine,
+              _halfLine,
+              _quarterLine,
+              _quarterLine,
+              _line,
+            ],
+          ),
+        );
+
+        final indicator = Container(
+          height: constraints.maxHeight,
+          padding: EdgeInsets.only(
+            top: stopperHeight +
+                (constraints.maxHeight /
+                    _state.maxZoomLevel *
+                    (_state.currentZoomLevel - 1)),
+            bottom: (constraints.maxHeight - stopperHeight) -
+                (constraints.maxHeight /
+                    _state.maxZoomLevel *
+                    (_state.currentZoomLevel - 1)) -
+                4.0,
+          ),
+          width: indicatorWidth,
+          child: _halfLine.copyWith(
+              color: Colors.blueAccent, height: 2.0, width: 8.0),
+        );
+
+        return Stack(
+          alignment: Alignment.centerRight,
+          children: [
+            text,
+            markings,
+            indicator,
+          ],
+        );
+      },
     );
   }
 }
