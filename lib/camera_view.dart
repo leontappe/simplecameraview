@@ -39,18 +39,20 @@ class _CameraViewState extends State<CameraView> {
   Widget build(BuildContext context) {
     return Stack(
       fit: StackFit.expand,
+      alignment: Alignment.center,
       children: [
-        if (_showDebugInfo)
-          Align(
-            alignment: Alignment.bottomLeft,
-            child: _debugInfo(),
-          ),
         ValueListenableBuilder<CameraValue>(
           valueListenable: widget.controller,
           builder: widget.controller.value.isInitialized
-              ? _previewBuilder
+              ? _previewWindowBuilder
               : (_, __, ___) => const SizedBox(),
-        )
+        ),
+        if (_showDebugInfo)
+          Align(
+            alignment: Alignment.center,
+            child: _debugInfoBuilder(),
+          ),
+        _gestureDetectorBuilder()
       ],
     );
   }
@@ -75,9 +77,10 @@ class _CameraViewState extends State<CameraView> {
     }
   }
 
-  Widget _debugInfo() {
-    return Container(
-      decoration: BoxDecoration(color: Colors.black.withAlpha(128)),
+  Widget _debugInfoBuilder() {
+    return SizedBox(
+      height: MediaQuery.of(context).size.height * 0.2,
+      width: MediaQuery.of(context).size.width * 0.8,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -86,6 +89,28 @@ class _CameraViewState extends State<CameraView> {
           Text('Max Zoom: ${_state.maxZoomLevel}'),
         ],
       ),
+    );
+  }
+
+  Widget _gestureDetectorBuilder() {
+    return GestureDetector(
+      onScaleUpdate: (details) {
+        final delta = details.scale - 8.0;
+        final newZoomLevel = _state.currentZoomLevel + delta;
+        if (newZoomLevel >= _state.minZoomLevel &&
+            newZoomLevel <= _state.maxZoomLevel) {
+          widget.controller.setZoomLevel(newZoomLevel);
+          setState(() {
+            _state.currentZoomLevel = newZoomLevel;
+          });
+        }
+      },
+      onTap: () {
+        HapticFeedback.heavyImpact();
+        setState(() {
+          _showDebugInfo = !_showDebugInfo;
+        });
+      },
     );
   }
 
@@ -106,49 +131,63 @@ class _CameraViewState extends State<CameraView> {
     });
   }
 
-  bool _isLandscape() {
+  bool _isPortrait() {
     return <DeviceOrientation>[
-      DeviceOrientation.landscapeLeft,
-      DeviceOrientation.landscapeRight
+      DeviceOrientation.portraitDown,
+      DeviceOrientation.portraitUp
     ].contains(_getApplicableOrientation());
   }
 
-  // return container that clips the camera preview to the screen size, discarding any pixels that are off-screen
-  Widget _previewBuilder(
-      BuildContext context, CameraValue value, Widget? child) {
-    return GestureDetector(
-      onScaleUpdate: (details) {
-        final delta = details.scale - 8.0;
-        final newZoomLevel = _state.currentZoomLevel + delta;
-        if (newZoomLevel >= _state.minZoomLevel &&
-            newZoomLevel <= _state.maxZoomLevel) {
-          widget.controller.setZoomLevel(newZoomLevel);
-          setState(() {
-            _state.currentZoomLevel = newZoomLevel;
-          });
-        }
-      },
-      onDoubleTap: () {
-        setState(() {
-          _showDebugInfo = !_showDebugInfo;
-        });
-      },
-      child: OverflowBox(
-        alignment: Alignment.center,
-        child: FittedBox(
-          clipBehavior: Clip.hardEdge,
-          fit: BoxFit.cover,
-          child: SizedBox(
-            width: _isLandscape()
-                ? widget.controller.value.previewSize!.width
-                : widget.controller.value.previewSize!.height,
-            height: _isLandscape()
-                ? widget.controller.value.previewSize!.height
-                : widget.controller.value.previewSize!.width,
-            child: widget.controller.buildPreview(),
-          ),
+  Widget _previewBuilder() {
+    // Get the native preview size from the controller.
+    final previewSize = widget.controller.value.previewSize!;
+
+    return OverflowBox(
+      alignment: Alignment.center,
+      child: FittedBox(
+        clipBehavior: Clip.hardEdge,
+        fit: BoxFit.cover,
+        child: SizedBox(
+          width: _isPortrait() ? previewSize.height : previewSize.width,
+          height: _isPortrait() ? previewSize.width : previewSize.height,
+          child: widget.controller.buildPreview(),
         ),
       ),
+    );
+  }
+
+  // return container that clips the camera preview to the screen size, discarding any pixels that are off-screen
+  Widget _previewWindowBuilder(
+      BuildContext context, CameraValue value, Widget? child) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Calculate the maximum width and height from the parent.
+        final double maxWidth = constraints.maxWidth;
+        final double maxHeight = constraints.maxHeight;
+        // Choose the ratio based on device orientation.
+        final double aspectRatio = _isPortrait() ? 9 / 16 : 16 / 9;
+
+        // Determine the ideal width and height keeping our desired aspect ratio.
+        double previewWidth;
+        double previewHeight;
+        if (maxWidth / maxHeight < aspectRatio) {
+          // the available width is the limiting factor
+          previewWidth = maxWidth;
+          previewHeight = previewWidth / aspectRatio;
+        } else {
+          // the available height is the limiting factor
+          previewHeight = maxHeight;
+          previewWidth = previewHeight * aspectRatio;
+        }
+
+        return Center(
+          child: SizedBox(
+            width: previewWidth,
+            height: previewHeight,
+            child: _previewBuilder(),
+          ),
+        );
+      },
     );
   }
 }
