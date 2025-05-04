@@ -7,14 +7,32 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 class CameraState {
+  bool isPortrait;
+
   double currentZoomLevel;
   double minZoomLevel;
   double maxZoomLevel;
 
+  double currentExposureOffset;
+  double minExposureOffset;
+  double maxExposureOffset;
+  double exposureOffsetStep;
+
+  FlashMode flashMode;
+
+  bool lockFocus;
+
   CameraState({
+    this.isPortrait = false,
     this.currentZoomLevel = 1.0,
     this.minZoomLevel = 1.0,
     this.maxZoomLevel = 1.0,
+    this.currentExposureOffset = 0.0,
+    this.minExposureOffset = -1.0,
+    this.maxExposureOffset = 1.0,
+    this.exposureOffsetStep = 0.1,
+    this.flashMode = FlashMode.off,
+    this.lockFocus = false,
   });
 }
 
@@ -34,6 +52,8 @@ class _CameraViewState extends State<CameraView> {
   final CameraState _state = CameraState();
 
   bool _showDebugInfo = false;
+  bool _showControls = false;
+  bool _showSettings = false;
 
   @override
   Widget build(BuildContext context) {
@@ -52,7 +72,24 @@ class _CameraViewState extends State<CameraView> {
             alignment: Alignment.center,
             child: _debugInfoBuilder(),
           ),
-        _gestureDetectorBuilder()
+        _gestureDetectorBuilder(),
+        if (_showControls)
+          Align(
+            alignment:
+                _state.isPortrait ? Alignment.topLeft : Alignment.topLeft,
+            child: _controlsLeftBuilder(),
+          ),
+        if (_showControls)
+          Align(
+            alignment:
+                _state.isPortrait ? Alignment.bottomLeft : Alignment.topRight,
+            child: _controlsRightBuilder(),
+          ),
+        if (_showSettings)
+          Align(
+            alignment: Alignment.center,
+            child: _settingsBuilder(),
+          )
       ],
     );
   }
@@ -74,28 +111,175 @@ class _CameraViewState extends State<CameraView> {
   void _controllerStateListener() {
     if (widget.controller.value.isInitialized) {
       _getZoomLevels();
+      _getExposureOffsets();
+      _getOrientation();
     }
   }
 
+  Widget _controlsBuilder({List<Widget> children = const []}) {
+    return Container(
+      padding: const EdgeInsets.all(16.0),
+      child: _state.isPortrait
+          ? Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: children.reversed.toList(),
+            )
+          : Column(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: children,
+            ),
+    );
+  }
+
+  Widget _controlsLeftBuilder() {
+    return _controlsBuilder(
+      children: [
+        IconButton(
+          icon: _flashIconBuilder(_state.flashMode),
+          onPressed: () {
+            HapticFeedback.heavyImpact();
+
+            // Cycle through flash modes
+            setState(() {
+              switch (_state.flashMode) {
+                case FlashMode.auto:
+                  _state.flashMode = FlashMode.always;
+                  break;
+                case FlashMode.always:
+                  _state.flashMode = FlashMode.torch;
+                  break;
+                case FlashMode.torch:
+                  _state.flashMode = FlashMode.off;
+                  break;
+                case FlashMode.off:
+                  _state.flashMode = FlashMode.auto;
+                  break;
+              }
+            });
+
+            widget.controller.setFlashMode(_state.flashMode);
+          },
+        ),
+        Spacer(), // Notch spacer
+        IconButton(
+          icon: const Icon(Icons.settings_rounded),
+          onPressed: () {
+            HapticFeedback.heavyImpact();
+            setState(() {
+              _showSettings = !_showSettings;
+            });
+          },
+        ),
+      ],
+    );
+  }
+
+  /// Right side controls
+  ///
+  /// This is where more nitty gritty controls like exposure, framerate, white balance, etc. live
+  Widget _controlsRightBuilder() {
+    return _controlsBuilder(
+      children: [
+        IconButton(
+          icon: const Icon(Icons.center_focus_weak),
+          onPressed: () {
+            HapticFeedback.heavyImpact();
+
+            widget.controller.setFocusPoint(null);
+          },
+        ),
+        IconButton(
+          icon: _state.lockFocus
+              ? const Icon(Icons.lock)
+              : const Icon(Icons.lock_open),
+          onPressed: () {
+            HapticFeedback.heavyImpact();
+            setState(() {
+              _state.lockFocus = !_state.lockFocus;
+            });
+            widget.controller.setFocusMode(
+              _state.lockFocus ? FocusMode.locked : FocusMode.auto,
+            );
+          },
+        ),
+        IconButton(
+          icon: const Icon(Icons.exposure),
+          onPressed: () {
+            HapticFeedback.heavyImpact();
+            setState(() {
+              _state.currentExposureOffset =
+                  (_state.currentExposureOffset + _state.exposureOffsetStep)
+                      .clamp(
+                _state.minExposureOffset,
+                _state.maxExposureOffset,
+              );
+            });
+            widget.controller.setExposureOffset(_state.currentExposureOffset);
+          },
+          onLongPress: () {
+            HapticFeedback.heavyImpact();
+            setState(() {
+              _state.currentExposureOffset = 0;
+            });
+            widget.controller.setExposureOffset(_state.currentExposureOffset);
+          },
+        ),
+      ],
+    );
+  }
+
   Widget _debugInfoBuilder() {
-    return SizedBox(
-      height: MediaQuery.of(context).size.height * 0.2,
-      width: MediaQuery.of(context).size.width * 0.8,
+    return Container(
+      padding: const EdgeInsets.all(16.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('Zoom: ${_state.currentZoomLevel}'),
-          Text('Min Zoom: ${_state.minZoomLevel}'),
-          Text('Max Zoom: ${_state.maxZoomLevel}'),
+          Text('Min zoom: ${_state.minZoomLevel}'),
+          Text('Max zoom: ${_state.maxZoomLevel}'),
+          Text('Exposure: ${_state.currentExposureOffset}'),
+          Text('Min exposure offset: ${_state.minExposureOffset}'),
+          Text('Max exposure offset: ${_state.maxExposureOffset}'),
+          Text('Exposure offset step: ${_state.exposureOffsetStep}'),
+          Text('Flash Mode: ${_flashModeToString(_state.flashMode)}'),
+          Text('Focus Mode: ${_state.lockFocus ? "Locked" : "Auto"}'),
+          Text('Orientation: ${_getApplicableOrientation()}'),
+          Text('Preview size: ${widget.controller.value.previewSize}'),
         ],
       ),
     );
   }
 
+  Widget _flashIconBuilder(FlashMode mode) {
+    switch (mode) {
+      case FlashMode.auto:
+        return const Icon(Icons.flash_auto);
+      case FlashMode.always:
+        return const Icon(Icons.flash_on);
+      case FlashMode.off:
+        return const Icon(Icons.flash_off);
+      case FlashMode.torch:
+        return const Icon(Icons.flashlight_on);
+    }
+  }
+
+  String _flashModeToString(FlashMode mode) {
+    switch (mode) {
+      case FlashMode.auto:
+        return 'Auto';
+      case FlashMode.always:
+        return 'Always';
+      case FlashMode.off:
+        return 'Off';
+      case FlashMode.torch:
+        return 'Torch';
+    }
+  }
+
   Widget _gestureDetectorBuilder() {
     return GestureDetector(
-      onScaleUpdate: (details) {
-        final delta = details.scale - 8.0;
+      onVerticalDragUpdate: (details) {
+        final delta = details.delta.dy / 100;
         final newZoomLevel = _state.currentZoomLevel + delta;
         if (newZoomLevel >= _state.minZoomLevel &&
             newZoomLevel <= _state.maxZoomLevel) {
@@ -105,10 +289,16 @@ class _CameraViewState extends State<CameraView> {
           });
         }
       },
-      onTap: () {
+      onDoubleTap: () {
         HapticFeedback.heavyImpact();
         setState(() {
           _showDebugInfo = !_showDebugInfo;
+        });
+      },
+      onTap: () {
+        HapticFeedback.heavyImpact();
+        setState(() {
+          _showControls = !_showControls;
         });
       },
     );
@@ -117,9 +307,23 @@ class _CameraViewState extends State<CameraView> {
   DeviceOrientation _getApplicableOrientation() {
     return widget.controller.value.isRecordingVideo
         ? widget.controller.value.recordingOrientation!
-        : (widget.controller.value.previewPauseOrientation ??
-            widget.controller.value.lockedCaptureOrientation ??
+        : (widget.controller.value.lockedCaptureOrientation ??
             widget.controller.value.deviceOrientation);
+  }
+
+  void _getExposureOffsets() {
+    widget.controller.getMinExposureOffset().then((value) {
+      _state.minExposureOffset = value;
+    });
+    widget.controller.getMaxExposureOffset().then((value) {
+      _state.maxExposureOffset = value;
+    });
+  }
+
+  void _getOrientation() {
+    setState(() {
+      _state.isPortrait = _isPortrait();
+    });
   }
 
   void _getZoomLevels() {
@@ -188,6 +392,69 @@ class _CameraViewState extends State<CameraView> {
           ),
         );
       },
+    );
+  }
+
+  Widget _settingsBuilder() {
+    return Container(
+      width: MediaQuery.of(context).size.width,
+      height: MediaQuery.of(context).size.height,
+      color: Colors.blueGrey.shade900,
+      padding: const EdgeInsets.all(8.0),
+      child: Stack(
+        fit: StackFit.expand,
+        alignment: Alignment.center,
+        children: [
+          // Grid overlay
+          Padding(
+            padding: const EdgeInsets.only(top: 42.0, left: 48.0, right: 32.0),
+            child: GridView.builder(
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 3,
+                crossAxisSpacing: 4.0,
+                mainAxisExtent: MediaQuery.of(context).size.height * 0.4,
+              ),
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: 6,
+              itemBuilder: (context, index) {
+                return Container(
+                  margin: const EdgeInsets.all(4.0),
+                  color: Colors.blueGrey.shade800,
+                );
+              },
+            ),
+          ),
+
+          // Settings text
+          Align(
+            alignment: Alignment.topLeft,
+            child: Transform.translate(
+              offset: Offset(42.0, 0),
+              child: Text(
+                'Settings',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 24.0,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+
+          // Close button
+          Align(
+            alignment: Alignment.topRight,
+            child: IconButton(
+              onPressed: () {
+                setState(() {
+                  _showSettings = false;
+                });
+              },
+              icon: const Icon(Icons.close, color: Colors.white),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

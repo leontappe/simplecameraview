@@ -4,8 +4,6 @@ import 'package:flutter/services.dart';
 
 import 'camera_view.dart';
 
-late List<CameraDescription> _cameras;
-
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -15,6 +13,8 @@ Future<void> main() async {
 
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
 }
+
+late List<CameraDescription> _cameras;
 
 /// CameraApp is the Main Application.
 class CameraApp extends StatefulWidget {
@@ -27,6 +27,26 @@ class CameraApp extends StatefulWidget {
 
 class _CameraAppState extends State<CameraApp> {
   late CameraController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      theme: ThemeData.dark(),
+      home: Scaffold(
+        body: Center(
+          child: controller.value.isInitialized
+              ? CameraView(controller)
+              : const CircularProgressIndicator(),
+        ),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    controller.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -56,19 +76,5 @@ class _CameraAppState extends State<CameraApp> {
         }
       }
     });
-  }
-
-  @override
-  void dispose() {
-    controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Directionality(
-      textDirection: TextDirection.ltr,
-      child: CameraView(controller),
-    );
   }
 }
