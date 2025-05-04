@@ -54,6 +54,25 @@ class _CameraViewState extends State<CameraView> {
   bool _showDebugInfo = false;
   bool _showControls = false;
   bool _showSettings = false;
+  bool _showZoomIndicator = false;
+
+  Container get _halfLine => Container(
+        height: 2.0,
+        width: 16.0,
+        color: Colors.white38,
+      );
+
+  Container get _line => Container(
+        height: 2.0,
+        width: 32.0,
+        color: Colors.white38,
+      );
+
+  Container get _quarterLine => Container(
+        height: 2.0,
+        width: 8.0,
+        color: Colors.white38,
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -71,6 +90,60 @@ class _CameraViewState extends State<CameraView> {
           Align(
             alignment: Alignment.center,
             child: _debugInfoBuilder(),
+          ),
+        if (_showZoomIndicator)
+          Align(
+            alignment:
+                _state.isPortrait ? Alignment.bottomLeft : Alignment.topRight,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final stopperHeight = 16.0;
+                final indicatorWidth = 32.0;
+
+                return Stack(
+                  children: [
+                    Container(
+                      padding: EdgeInsets.only(
+                        top: stopperHeight,
+                        bottom: stopperHeight + 2.0,
+                      ),
+                      height: constraints.maxHeight,
+                      width: indicatorWidth,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          _line,
+                          _quarterLine,
+                          _quarterLine,
+                          _halfLine,
+                          _quarterLine,
+                          _quarterLine,
+                          _line,
+                        ],
+                      ),
+                    ),
+                    Container(
+                      height: constraints.maxHeight,
+                      padding: EdgeInsets.only(
+                        top: stopperHeight +
+                            (constraints.maxHeight /
+                                _state.maxZoomLevel *
+                                (_state.currentZoomLevel - 1)),
+                        bottom: (constraints.maxHeight - stopperHeight) -
+                            (constraints.maxHeight /
+                                _state.maxZoomLevel *
+                                (_state.currentZoomLevel - 1)) -
+                            4.0,
+                      ),
+                      width: indicatorWidth,
+                      child: _halfLine.copyWith(
+                          color: Colors.blueAccent, height: 2.0, width: 8.0),
+                    ),
+                  ],
+                );
+              },
+            ),
           ),
         _gestureDetectorBuilder(),
         if (_showControls)
@@ -278,16 +351,31 @@ class _CameraViewState extends State<CameraView> {
 
   Widget _gestureDetectorBuilder() {
     return GestureDetector(
-      onVerticalDragUpdate: (details) {
-        final delta = details.delta.dy / 100;
-        final newZoomLevel = _state.currentZoomLevel + delta;
-        if (newZoomLevel >= _state.minZoomLevel &&
-            newZoomLevel <= _state.maxZoomLevel) {
-          widget.controller.setZoomLevel(newZoomLevel);
+      onVerticalDragStart: (details) {
+        HapticFeedback.lightImpact();
+        setState(() {
+          _showZoomIndicator = true;
+        });
+      },
+      onVerticalDragEnd: (details) {
+        HapticFeedback.lightImpact();
+
+        Future.delayed(const Duration(milliseconds: 300), () {
           setState(() {
-            _state.currentZoomLevel = newZoomLevel;
+            _showZoomIndicator = false;
           });
-        }
+        });
+      },
+      onVerticalDragUpdate: (details) {
+        final delta = details.delta.dy / 60;
+        final newZoomLevel = (_state.currentZoomLevel + delta).clamp(
+          _state.minZoomLevel,
+          _state.maxZoomLevel,
+        );
+        widget.controller.setZoomLevel(newZoomLevel);
+        setState(() {
+          _state.currentZoomLevel = newZoomLevel;
+        });
       },
       onDoubleTap: () {
         HapticFeedback.heavyImpact();
@@ -331,7 +419,9 @@ class _CameraViewState extends State<CameraView> {
       _state.minZoomLevel = value;
     });
     widget.controller.getMaxZoomLevel().then((value) {
-      _state.maxZoomLevel = value;
+      // zooms levels get ridiculously high on some devices
+      // so we need to clamp them to a reasonable value
+      _state.maxZoomLevel = value.clamp(1, 10);
     });
   }
 
@@ -455,6 +545,25 @@ class _CameraViewState extends State<CameraView> {
           ),
         ],
       ),
+    );
+  }
+}
+
+extension CopyableContainer on Container {
+  /// Creates a copy of this container with the given properties.
+  Container copyWith({
+    double? height,
+    double? width,
+    Color? color,
+    Padding? padding,
+    Widget? child,
+  }) {
+    return Container(
+      height: height ?? constraints?.maxHeight,
+      width: width ?? constraints?.maxWidth,
+      color: color ?? this.color,
+      padding: padding?.padding ?? this.padding,
+      child: child ?? this.child,
     );
   }
 }
