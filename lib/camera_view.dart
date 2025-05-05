@@ -298,9 +298,21 @@ class _CameraViewState extends State<CameraView> {
           },
         ),
         IconButton(
-          icon: _state.lockFocus
-              ? const Icon(Icons.lock)
-              : const Icon(Icons.lock_open),
+          icon: Stack(
+            alignment: Alignment.center,
+            children: [
+              const Icon(Icons.center_focus_weak_outlined),
+              Transform.translate(
+                offset: Offset(8, -8),
+                child: Transform.scale(
+                  scale: 0.5,
+                  child: _state.lockFocus
+                      ? Icon(Icons.lock, color: Theme.of(context).colorScheme.primary)
+                      : const SizedBox(),
+                ),
+              ),
+            ],
+          ),
           onPressed: () {
             HapticFeedback.heavyImpact();
             setState(() {
@@ -334,16 +346,7 @@ class _CameraViewState extends State<CameraView> {
     }
 
     return _controlsBuilder(
-      children: [
-        IconButton(
-          icon: const Icon(Icons.center_focus_weak),
-          onPressed: () {
-            HapticFeedback.heavyImpact();
-
-            widget.controller.setFocusPoint(null);
-          },
-        ),
-      ],
+      children: [],
     );
   }
 
@@ -638,28 +641,6 @@ class _CameraViewState extends State<CameraView> {
                             _state.currentExposureOffset = value;
                           });
                         },
-                      ),
-                    ),
-                    SizedBox(
-                      height: 42.0,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          SettingsTitle('Lock Exposure'),
-                          Switch(
-                            value: _state.lockExposure,
-                            onChanged: (value) {
-                              HapticFeedback.heavyImpact();
-                              setState(() {
-                                _state.lockExposure = value;
-                              });
-                              widget.controller.setExposureMode(
-                                value ? ExposureMode.locked : ExposureMode.auto,
-                              );
-                            },
-                          ),
-                        ],
                       ),
                     ),
                   ],
