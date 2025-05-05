@@ -740,16 +740,10 @@ class _CameraViewState extends State<CameraView> {
                                       .setFocusPoint(_state.focusPoint);
                                 },
                                 child: Container(
-                                  color: Colors.grey,
-                                  child: Center(
-                                    child: Text(
-                                      '$index',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 10.0,
-                                      ),
-                                    ),
-                                  ),
+                                  color:
+                                      _state.focusPoint == _areaOffsets[index]
+                                          ? Colors.white30
+                                          : Colors.white10,
                                 ),
                               );
                             },
