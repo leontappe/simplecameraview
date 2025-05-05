@@ -1,10 +1,8 @@
-import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import 'camera_bloc.dart';
-import 'camera_state.dart';
+import '../camera_bloc.dart';
 
 class PreviewLeftControls extends StatelessWidget {
   const PreviewLeftControls({super.key});
@@ -74,7 +72,7 @@ class PreviewLeftControls extends StatelessWidget {
             icon: const Icon(Icons.settings_rounded),
             onPressed: () {
               HapticFeedback.heavyImpact();
-              // TODO: Implement settings action
+              bloc.updateUIState(showSettings: !state.uiState.showSettings);
             },
           ),
         ];

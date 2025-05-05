@@ -1,7 +1,7 @@
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 
-import 'util.dart';
+import '../util.dart';
 
 /// Container that clips the camera preview to the screen size, discarding any pixels that are off-screen
 class PreviewWindow extends StatelessWidget {

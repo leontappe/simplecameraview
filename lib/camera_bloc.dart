@@ -35,6 +35,8 @@ class CameraBloc extends Bloc<CameraEvent, CameraState> {
           lockExposure: event.lockExposure,
           flashMode: event.flashMode,
           lockFocus: event.lockFocus,
+          exposurePoint: event.exposurePoint,
+          focusPoint: event.focusPoint,
         );
         _setControllerAttributes(state, newState);
         emit(newState);
@@ -44,6 +46,7 @@ class CameraBloc extends Bloc<CameraEvent, CameraState> {
             showControls: event.showControls,
             showZoomIndicator: event.showZoomIndicator,
             showDebugInfo: event.showDebugInfo,
+            showSettings: event.showSettings,
           ),
         ));
       }
@@ -93,12 +96,14 @@ class CameraBloc extends Bloc<CameraEvent, CameraState> {
     bool? showZoomIndicator,
     bool? isZooming,
     bool? showDebugInfo,
+    bool? showSettings,
   }) {
     add(UpdateCameraUIEvent(
       showControls: showControls,
       showZoomIndicator: showZoomIndicator,
       isZooming: isZooming,
       showDebugInfo: showDebugInfo,
+      showSettings: showSettings,
     ));
   }
 
@@ -211,12 +216,14 @@ class UpdateCameraUIEvent extends CameraEvent {
   final bool? showZoomIndicator;
   final bool? isZooming;
   final bool? showDebugInfo;
+  final bool? showSettings;
 
   UpdateCameraUIEvent({
     this.showControls,
     this.showZoomIndicator,
     this.isZooming,
     this.showDebugInfo,
+    this.showSettings,
   });
 
   Map<String, dynamic> toJson() {
@@ -225,6 +232,7 @@ class UpdateCameraUIEvent extends CameraEvent {
       'showZoomIndicator': showZoomIndicator,
       'isZooming': isZooming,
       'showDebugInfo': showDebugInfo,
+      'showSettings': showSettings,
     };
   }
 

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import 'camera_bloc.dart';
+import '../camera_bloc.dart';
 
 class DebugInfo extends StatelessWidget {
   const DebugInfo({super.key});

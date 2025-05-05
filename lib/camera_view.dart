@@ -5,20 +5,20 @@
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:simplecameraview/widgets/settings_modal.dart';
 
 import 'camera_bloc.dart';
-import 'debug_info.dart';
-import 'gesture_overlay.dart';
-import 'preview_left_controls.dart';
-import 'preview_window.dart';
-import 'zoom_indicator.dart';
+import 'widgets/debug_info.dart';
+import 'widgets/gesture_overlay.dart';
+import 'widgets/preview_left_controls.dart';
+import 'widgets/preview_window.dart';
+import 'widgets/zoom_indicator.dart';
 
 /// A widget showing a live camera preview.
 class CameraView extends StatefulWidget {
   /// The controller for the camera that the preview is shown for.
   final CameraController controller;
 
-  /// Creates a preview widget for the given camera controller.
   const CameraView(this.controller, {super.key});
 
   @override
@@ -35,39 +35,7 @@ class _CameraViewState extends State<CameraView> {
     return BlocProvider<CameraBloc>.value(
       value: _bloc,
       child: BlocBuilder<CameraBloc, CameraState>(
-        builder: (context, state) {
-          return Stack(
-            fit: StackFit.expand,
-            alignment: Alignment.center,
-            children: [
-              ValueListenableBuilder<CameraValue>(
-                valueListenable: _controller,
-                builder: _controller.value.isInitialized
-                    ? (_, __, ___) => PreviewWindow(controller: _controller)
-                    : (_, __, ___) => const SizedBox(),
-              ),
-              if (state.uiState.showDebugInfo)
-                Align(
-                  alignment: Alignment.center,
-                  child: DebugInfo(),
-                ),
-              if (state.uiState.showZoomIndicator)
-                Align(
-                  alignment: state.isPortrait
-                      ? Alignment.bottomLeft
-                      : Alignment.topRight,
-                  child: ZoomIndicator(),
-                ),
-              GestureOverlay(),
-              if (state.uiState.showControls)
-                Align(
-                  alignment:
-                      state.isPortrait ? Alignment.topLeft : Alignment.topLeft,
-                  child: PreviewLeftControls(),
-                ),
-            ],
-          );
-        },
+        builder: _build,
       ),
     );
   }
@@ -79,6 +47,39 @@ class _CameraViewState extends State<CameraView> {
     _bloc = CameraBloc(
       cameraController: _controller,
       initialState: CameraState(),
+    );
+  }
+
+  Widget _build(BuildContext context, CameraState state) {
+    return Stack(
+      fit: StackFit.expand,
+      alignment: Alignment.center,
+      children: [
+        ValueListenableBuilder<CameraValue>(
+          valueListenable: _controller,
+          builder: _controller.value.isInitialized
+              ? (_, __, ___) => PreviewWindow(controller: _controller)
+              : (_, __, ___) => const SizedBox(),
+        ),
+        if (state.uiState.showDebugInfo)
+          Align(
+            alignment: Alignment.center,
+            child: DebugInfo(),
+          ),
+        if (state.uiState.showZoomIndicator)
+          Align(
+            alignment:
+                state.isPortrait ? Alignment.bottomLeft : Alignment.topRight,
+            child: ZoomIndicator(),
+          ),
+        GestureOverlay(),
+        if (state.uiState.showControls)
+          Align(
+            alignment: state.isPortrait ? Alignment.topLeft : Alignment.topLeft,
+            child: PreviewLeftControls(),
+          ),
+        if (state.uiState.showSettings) SettingsModal()
+      ],
     );
   }
 }

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import 'camera_bloc.dart';
+import '../camera_bloc.dart';
 
 class GestureOverlay extends StatelessWidget {
   const GestureOverlay({super.key});

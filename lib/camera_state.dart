@@ -84,12 +84,14 @@ class CameraUIState {
   final bool showZoomIndicator;
   final bool isZooming;
   final bool showDebugInfo;
+  final bool showSettings;
 
   const CameraUIState({
     this.showControls = false,
     this.showZoomIndicator = false,
     this.isZooming = false,
     this.showDebugInfo = false,
+    this.showSettings = false,
   });
 
   @override
@@ -97,7 +99,8 @@ class CameraUIState {
     return showControls.hashCode ^
         showZoomIndicator.hashCode ^
         isZooming.hashCode ^
-        showDebugInfo.hashCode;
+        showDebugInfo.hashCode ^
+        showSettings.hashCode;
   }
 
   @override
@@ -108,7 +111,8 @@ class CameraUIState {
         other.showControls == showControls &&
         other.showZoomIndicator == showZoomIndicator &&
         other.isZooming == isZooming &&
-        other.showDebugInfo == showDebugInfo;
+        other.showDebugInfo == showDebugInfo &&
+        other.showSettings == showSettings;
   }
 
   CameraUIState copyWith({
@@ -116,12 +120,14 @@ class CameraUIState {
     bool? showZoomIndicator,
     bool? isZooming,
     bool? showDebugInfo,
+    bool? showSettings,
   }) {
     return CameraUIState(
       showControls: showControls ?? this.showControls,
       showZoomIndicator: showZoomIndicator ?? this.showZoomIndicator,
       isZooming: isZooming ?? this.isZooming,
       showDebugInfo: showDebugInfo ?? this.showDebugInfo,
+      showSettings: showSettings ?? this.showSettings,
     );
   }
 
@@ -131,6 +137,7 @@ class CameraUIState {
       'showZoomIndicator': showZoomIndicator,
       'isZooming': isZooming,
       'showDebugInfo': showDebugInfo,
+      'showSettings': showSettings,
     };
   }
 

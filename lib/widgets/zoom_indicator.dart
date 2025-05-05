@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import 'camera_bloc.dart';
-import 'util.dart';
+import '../camera_bloc.dart';
+import '../util.dart';
 
 class ZoomIndicator extends StatelessWidget {
   const ZoomIndicator({super.key});
