@@ -221,44 +221,21 @@ class _CameraViewState extends State<CameraView> {
     // wait until controller is ready to get zoom levels
     widget.controller.addListener(_controllerStateListener);
 
-    _areaOffsets = [
-      Offset(
-        _controller.value.previewSize!.width / 6,
-        _controller.value.previewSize!.height / 6 * 5,
-      ),
-      Offset(
-        _controller.value.previewSize!.width / 6 * 3,
-        _controller.value.previewSize!.height / 6 * 5,
-      ),
-      Offset(
-        _controller.value.previewSize!.width / 6 * 5,
-        _controller.value.previewSize!.height / 6 * 5,
-      ),
-      Offset(
-        _controller.value.previewSize!.width / 6,
-        _controller.value.previewSize!.height / 6 * 3,
-      ),
-      Offset(
-        _controller.value.previewSize!.width / 6 * 3,
-        _controller.value.previewSize!.height / 6 * 3,
-      ),
-      Offset(
-        _controller.value.previewSize!.width / 6 * 5,
-        _controller.value.previewSize!.height / 6 * 3,
-      ),
-      Offset(
-        _controller.value.previewSize!.width / 6,
-        _controller.value.previewSize!.height / 6,
-      ),
-      Offset(
-        _controller.value.previewSize!.width / 6 * 3,
-        _controller.value.previewSize!.height / 6,
-      ),
-      Offset(
-        _controller.value.previewSize!.width / 6 * 5,
-        _controller.value.previewSize!.height / 6,
-      ),
-    ];
+    // offsets of a 3x3 grid
+    // offsets should point in the center of each grid cell
+    // the value of a point can co from (0,0) to (1,1)
+    // (0,0) is the bottom left corner of the preview
+    _areaOffsets = List.generate(
+      9,
+      (index) {
+        final x = index % 3;
+        final y = index ~/ 3;
+        return Offset(
+          (x + 1) / 4,
+          (y + 1) / 4,
+        );
+      },
+    );
   }
 
   void _controllerStateListener() {
@@ -710,52 +687,40 @@ class _CameraViewState extends State<CameraView> {
                   ],
                 ),
                 SettingsTile(
-                  title: 'Focus',
+                  title: 'Locks',
                   children: [
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      mainAxisAlignment: MainAxisAlignment.start,
                       children: [
-                        // 3x3 grid of focus points
-                        SizedBox(
-                          height: 96.0,
-                          width: 128.0,
-                          child: GridView.builder(
-                            gridDelegate:
-                                SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: 3,
-                              crossAxisSpacing: 2.0,
-                              mainAxisSpacing: 2.0,
-                              childAspectRatio: 1.6,
-                            ),
-                            itemCount: 9,
-                            itemBuilder: (context, index) {
-                              return InkWell(
-                                onTap: () {
-                                  HapticFeedback.heavyImpact();
-
-                                  setState(() {
-                                    _state.focusPoint = _areaOffsets[index];
-                                  });
-                                  widget.controller
-                                      .setFocusPoint(_state.focusPoint);
-                                },
-                                child: Container(
-                                  color:
-                                      _state.focusPoint == _areaOffsets[index]
-                                          ? Colors.white30
-                                          : Colors.white10,
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-
-                        const SizedBox(width: 8.0),
-
                         Column(
                           mainAxisSize: MainAxisSize.max,
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          crossAxisAlignment: CrossAxisAlignment.end,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            SettingsTitle('Lock Exposure'),
+                            Switch(
+                              value: _state.lockExposure,
+                              onChanged: (value) {
+                                HapticFeedback.heavyImpact();
+                                setState(() {
+                                  _state.lockExposure = value;
+                                });
+                                widget.controller.setExposureMode(
+                                  value
+                                      ? ExposureMode.locked
+                                      : ExposureMode.auto,
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+                        const SizedBox(width: 8.0),
+                        const VerticalDivider(),
+                        const SizedBox(width: 8.0),
+                        Column(
+                          mainAxisSize: MainAxisSize.max,
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             SettingsTitle('Lock Focus'),
                             Switch(
@@ -768,6 +733,13 @@ class _CameraViewState extends State<CameraView> {
                                 widget.controller.setFocusMode(
                                   value ? FocusMode.locked : FocusMode.auto,
                                 );
+
+                                if (!value) {
+                                  setState(() {
+                                    _state.focusPoint = null;
+                                  });
+                                  widget.controller.setFocusPoint(null);
+                                }
                               },
                             ),
                           ],
@@ -777,12 +749,157 @@ class _CameraViewState extends State<CameraView> {
                   ],
                 ),
                 SettingsTile(
-                  title: '',
-                  children: [],
+                  title: 'Focus Point',
+                  children: [
+                    LayoutBuilder(
+                      builder: (context, constraints) => SizedBox(
+                        width: constraints.maxWidth,
+                        child: Stack(
+                          alignment: Alignment.centerLeft,
+                          children: [
+                            SizedBox(
+                              height: 96.0,
+                              width: 128.0,
+                              child: GridView.builder(
+                                gridDelegate:
+                                    SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: 3,
+                                  crossAxisSpacing: 2.0,
+                                  mainAxisSpacing: 2.0,
+                                  childAspectRatio: 1.6,
+                                ),
+                                itemCount: 9,
+                                itemBuilder: (context, index) {
+                                  return InkWell(
+                                    onTap: () {
+                                      HapticFeedback.heavyImpact();
+
+                                      if (_state.focusPoint ==
+                                          _areaOffsets[index]) {
+                                        // If the focus point is already set to this area, reset it to null
+                                        setState(() {
+                                          _state.focusPoint = null;
+                                        });
+                                        widget.controller.setFocusPoint(null);
+                                        return;
+                                      }
+
+                                      setState(() {
+                                        _state.lockFocus = true;
+                                        _state.focusPoint = _areaOffsets[index];
+                                      });
+                                      widget.controller.setFocusMode(
+                                        FocusMode.locked,
+                                      );
+                                      widget.controller
+                                          .setFocusPoint(_state.focusPoint);
+                                    },
+                                    child: Container(
+                                      color: _state.focusPoint ==
+                                              _areaOffsets[index]
+                                          ? Theme.of(context)
+                                              .colorScheme
+                                              .secondary
+                                              .withAlpha(192)
+                                          : Colors.white10,
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                            Positioned(
+                              bottom: 8.0,
+                              right: 8.0,
+                              child: TextButton(
+                                onPressed: () {
+                                  HapticFeedback.heavyImpact();
+                                  setState(() {
+                                    _state.focusPoint = null;
+                                    _state.lockFocus = false;
+                                  });
+                                  widget.controller.setFocusPoint(null);
+                                  widget.controller.setFocusMode(
+                                    FocusMode.auto,
+                                  );
+                                },
+                                child: Text('Clear'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 SettingsTile(
-                  title: '',
-                  children: [],
+                  title: 'Exposure Point',
+                  children: [
+                    LayoutBuilder(
+                      builder: (context, constraints) => SizedBox(
+                        width: constraints.maxWidth,
+                        child: Stack(
+                          alignment: Alignment.centerLeft,
+                          children: [
+                            SizedBox(
+                              height: 96.0,
+                              width: 128.0,
+                              child: GridView.builder(
+                                gridDelegate:
+                                    SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: 3,
+                                  crossAxisSpacing: 2.0,
+                                  mainAxisSpacing: 2.0,
+                                  childAspectRatio: 1.6,
+                                ),
+                                itemCount: 9,
+                                itemBuilder: (context, index) {
+                                  return InkWell(
+                                    onTap: () {
+                                      HapticFeedback.heavyImpact();
+
+                                      setState(() {
+                                        _state.exposurePoint =
+                                            _areaOffsets[index];
+                                      });
+                                      widget.controller.setExposurePoint(
+                                          _state.exposurePoint);
+                                    },
+                                    child: Container(
+                                      color: _state.exposurePoint ==
+                                              _areaOffsets[index]
+                                          ? Theme.of(context)
+                                              .colorScheme
+                                              .secondary
+                                              .withAlpha(192)
+                                          : Colors.white10,
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                            Positioned(
+                              bottom: 8.0,
+                              right: 8.0,
+                              child: TextButton(
+                                onPressed: () {
+                                  HapticFeedback.heavyImpact();
+                                  setState(() {
+                                    _state.exposurePoint = null;
+                                    _state.lockExposure = false;
+                                  });
+                                  widget.controller.setExposurePoint(null);
+                                  widget.controller.setExposureMode(
+                                    ExposureMode.auto,
+                                  );
+                                },
+                                child: Text('Clear'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
